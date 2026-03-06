@@ -3,136 +3,284 @@ import { base44 } from '@/api/base44Client';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Mail, Search, MessageSquare, FileText, Phone } from 'lucide-react';
+import { Mail, Search, MessageSquare, FileText, Phone, Bot, AlertTriangle, Check, RotateCcw, Zap, TrendingUp, Clock, Target, Cpu } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { useCampaign } from '../components/campaign/CampaignContext';
 
-const VALUES = { meetingBooked: 500, hotLead: 200, reply: 50, hourSaved: 400 };
-const COSTS = { emailGen: 0.05, companyIntel: 0.18, replyClassify: 0.04, proposalGen: 0.50, callScript: 0.17 };
+const VALUES = { meetingBooked: 2400, hotLead: 800, reply: 150, hourSaved: 400 };
 
 const dailyData = Array.from({ length: 30 }, (_, i) => ({
   day: `${i + 1}`,
-  spend: parseFloat(((i + 1) * 4.2 + Math.random() * 2).toFixed(1)),
-  value: parseFloat(((i + 1) * 38 + Math.random() * 20).toFixed(1)),
+  spend: parseFloat(((i + 1) * 2.1 + Math.random() * 1).toFixed(1)),
+  value: parseFloat(((i + 1) * 1280 + Math.random() * 500).toFixed(1)),
 }));
 
 const fmt = (n) => `₹${Number(n).toLocaleString('en-IN')}`;
 
-const aiStats = [
-  { icon: Mail, label: 'Emails written and sent', value: 520, prev: 410, color: 'text-indigo-400' },
-  { icon: Search, label: 'Companies researched', value: 156, prev: 120, color: 'text-blue-400' },
-  { icon: MessageSquare, label: 'Replies analyzed and routed', value: 68, prev: 55, color: 'text-emerald-400' },
-  { icon: FileText, label: 'Proposals generated', value: 5, prev: 3, color: 'text-teal-400' },
-  { icon: Phone, label: 'Call scripts created', value: 28, prev: 22, color: 'text-amber-400' },
+const aiActivity = [
+  { icon: Mail, label: 'Emails written and sent', value: 520, growth: '+27%', color: 'from-indigo-500 to-blue-500' },
+  { icon: Search, label: 'Companies researched', value: 156, growth: '+30%', color: 'from-blue-500 to-cyan-500' },
+  { icon: MessageSquare, label: 'Replies analyzed and routed', value: 68, growth: '+24%', color: 'from-emerald-500 to-teal-500' },
+  { icon: FileText, label: 'Proposals generated', value: 5, growth: '+67%', color: 'from-teal-500 to-indigo-500' },
+  { icon: Phone, label: 'Call scripts created', value: 28, growth: '+27%', color: 'from-amber-500 to-orange-500' },
+];
+
+const ROUTING_STEPS = [
+  { profile: 'D', full: 'Dominant', condition: 'Interest > 60 + Growth', model: 'Claude 3 Sonnet', task: 'High Personalization', cost: '₹4.20', badge: 'bg-red-500/10 text-red-500 border-red-500/20' },
+  { profile: 'I', full: 'Influential', condition: 'Conversational match', model: 'GPT-4o Mini', task: 'Conversational', cost: '₹0.85', badge: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' },
+  { profile: 'S', full: 'Steady', condition: 'Relationship focused', model: 'GPT-4o Mini', task: 'Relationship', cost: '₹0.85', badge: 'bg-green-500/10 text-green-500 border-green-500/20' },
+  { profile: 'C', full: 'Conscientious', condition: 'Detailed messaging', model: 'Claude 3 Sonnet', task: 'Detailed Outreach', cost: '₹4.20', badge: 'bg-blue-500/10 text-blue-500 border-blue-500/20' },
+  { profile: 'ANY', full: 'Generic', condition: 'Research Tasks', model: 'Gemini 1.5 Flash', task: 'Company Research', cost: '₹0.12', badge: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' },
+  { profile: 'ANY', full: 'Generic', condition: 'Interest < 35 OR Nurture', model: 'Mistral Small', task: 'Cost Saver Nurture', cost: '₹0.04', badge: 'bg-slate-500/10 text-slate-400 border-slate-500/20' },
+  { profile: 'ANY', full: 'Generic', condition: 'Voice AI Generation', model: 'Llama 3', task: 'Call Scripting', cost: '₹0.17', badge: 'bg-orange-500/10 text-orange-400 border-orange-500/20' },
 ];
 
 export default function ClientROI() {
+  const { state, toggleSmartRouting } = useCampaign();
   const { data: leads = [] } = useQuery({ queryKey: ['leads'], queryFn: () => base44.entities.Lead.list('-created_date', 200) });
   const { data: meetings = [] } = useQuery({ queryKey: ['meetings'], queryFn: () => base44.entities.Meeting.list('-scheduled_date', 50) });
 
-  const emailsSent = 520, repliesReceived = 68;
-  const meetingsBooked = meetings.filter(m => ['confirmed', 'pending'].includes(m.status)).length || 14;
-  const hotLeads = leads.filter(l => l.stage === 'hot').length || 8;
-  const hoursSaved = Math.round((emailsSent * 0.08) + (repliesReceived * 0.25) + (meetingsBooked * 0.5));
-  const totalSpend = parseFloat((emailsSent * COSTS.emailGen) + (156 * COSTS.companyIntel) + (repliesReceived * COSTS.replyClassify) + (5 * COSTS.proposalGen) + (28 * COSTS.callScript)).toFixed(2);
-  const totalValue = (meetingsBooked * VALUES.meetingBooked) + (hotLeads * VALUES.hotLead) + (repliesReceived * VALUES.reply) + (hoursSaved * VALUES.hourSaved);
-  const roiMultiple = (totalValue / Math.max(totalSpend, 1)).toFixed(1);
+  const emailsSent = 520;
+  const meetingsBooked = meetings.length || 14;
+  const hoursSaved = 66;
+  const totalSpendRaw = 64.06;
+  const totalValue = 38400;
+  const roiMultiple = (totalValue / totalSpendRaw).toFixed(1);
 
-  const insightCards = [
-    { label: 'Cheapest Win', value: '₹3.20', sub: 'Zara Khan · BuildFast', color: 'text-emerald-400' },
-    { label: 'Best ROI Channel', value: 'WhatsApp', sub: '₹1.40 cost per reply', color: 'text-teal-400' },
-    { label: 'Cost Per Meeting', value: fmt(Math.round(totalSpend / meetingsBooked)), sub: 'vs ₹8,000 agency', color: 'text-indigo-400' },
-    { label: 'Hours Saved', value: `${hoursSaved}h`, sub: `${(hoursSaved / 8).toFixed(1)} working days`, color: 'text-amber-400' },
-  ];
+  const isRoutingActive = state?.smartRoutingActive;
 
   return (
-    <div className="p-6 space-y-4 overflow-y-auto min-h-screen">
-      {/* Banner */}
-      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
-        className="rounded-2xl bg-gradient-to-r from-emerald-950 via-green-900 to-emerald-950 border border-emerald-700/30 px-8 py-5 flex items-center justify-between">
-        <div>
-          <p className="text-white text-lg font-bold">
-            This month your <span className="text-emerald-300">{fmt(totalSpend)}</span> spend delivered{' '}
-            <span className="text-emerald-300">{fmt(totalValue)}</span> in value
+    <div className="p-6 space-y-6 overflow-y-auto h-screen pb-24">
+      {/* Banner Card */}
+      <motion.div initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }}
+        className="rounded-[24px] bg-gradient-to-br from-[#0c2e1f] via-[#051c14] to-[#0c2e1f] border border-emerald-500/20 p-8 flex items-center justify-between shadow-2xl relative overflow-hidden group">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl group-hover:bg-emerald-500/10 transition-colors" />
+        <div className="relative z-10">
+          <h1 className="text-white text-3xl font-bold tracking-tight mb-2">
+            This month your <span className="text-emerald-400">₹{totalSpendRaw}</span> spend delivered <span className="text-emerald-400">₹{totalValue.toLocaleString('en-IN')}</span> in value
+          </h1>
+          <p className="text-emerald-400/80 text-sm font-medium flex items-center gap-2">
+            <TrendingUp className="w-4 h-4" />
+            {roiMultiple}× return on your AI spend
           </p>
-          <p className="text-emerald-400 text-sm mt-0.5 font-medium">{roiMultiple}× return on your AI spend</p>
         </div>
-        <div className="text-right shrink-0">
-          <p className="text-5xl font-black text-emerald-300">{roiMultiple}×</p>
-          <p className="text-emerald-600 text-xs font-medium mt-0.5">ROI MULTIPLIER</p>
+        <div className="text-right flex flex-col items-end relative z-10">
+          <p className="text-7xl font-black text-emerald-400 leading-none tracking-tighter">{roiMultiple}x</p>
+          <p className="text-white/40 text-[10px] uppercase font-black tracking-widest mt-2">ROI Multiplier</p>
         </div>
       </motion.div>
 
-      {/* Main row */}
-      <div className="flex gap-4">
-        {/* LEFT — What your AI did (55%) */}
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-          className="bg-[#111118] border border-[#1e1e2e] rounded-2xl overflow-hidden" style={{ flex: '0 0 55%' }}>
-          <div className="px-5 py-3.5 border-b border-[#1e1e2e]">
-            <p className="text-sm font-semibold text-white">What your AI did this month</p>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Left Column: What your AI did this month */}
+        <motion.div initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}
+          className="lg:col-span-7 bg-[#0b0b0f] border border-[#1e1e2e] rounded-[24px] overflow-hidden p-6 space-y-6">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-lg font-bold text-white tracking-tight">What your AI did this month</h2>
           </div>
-          <div className="divide-y divide-[#1e1e2e]">
-            {aiStats.map((stat, i) => {
-              const pctChange = Math.round(((stat.value - stat.prev) / stat.prev) * 100);
-              const barPct = Math.min((stat.value / (stat.value * 1.3)) * 100, 100);
-              const prevBarPct = Math.min((stat.prev / (stat.value * 1.3)) * 100, 100);
-              return (
-                <motion.div key={stat.label} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15 + i * 0.06 }}
-                  className="px-5 py-4 hover:bg-white/[0.01]">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2.5">
-                      <stat.icon className={`w-4 h-4 ${stat.color} shrink-0`} />
-                      <p className="text-sm text-white">{stat.label}</p>
+          <div className="space-y-7">
+            {aiActivity.map((stat, i) => (
+              <div key={stat.label} className="space-y-3 group">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-[#111118] border border-[#1e1e2e] flex items-center justify-center group-hover:border-white/20 transition-colors">
+                      <stat.icon className="w-5 h-5 text-slate-400" />
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`text-lg font-black ${stat.color}`}>{stat.value}</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">+{pctChange}%</span>
+                    <div>
+                      <p className="text-sm font-semibold text-white tracking-wide">{stat.label}</p>
+                      <p className="text-[10px] text-slate-500 mt-0.5">vs last month: <span className="text-emerald-400">{stat.growth}</span></p>
                     </div>
                   </div>
-                  <div className="relative h-1.5 bg-[#1a1a26] rounded-full overflow-hidden">
-                    <div className="absolute left-0 top-0 h-full rounded-full bg-[#2a2a3e]" style={{ width: `${prevBarPct}%` }} />
-                    <motion.div initial={{ width: 0 }} animate={{ width: `${barPct}%` }} transition={{ delay: 0.3 + i * 0.06, duration: 0.8 }}
-                      className={`absolute left-0 top-0 h-full rounded-full`} style={{ background: stat.color.replace('text-', '').includes('indigo') ? '#6366f1' : stat.color.replace('text-', '').includes('blue') ? '#3b82f6' : stat.color.replace('text-', '').includes('emerald') ? '#10b981' : stat.color.replace('text-', '').includes('teal') ? '#14b8a6' : '#f59e0b' }} />
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl font-black text-white">{stat.value}</span>
+                    <span className="text-[10px] px-2 py-1 rounded bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/20">{stat.growth}</span>
                   </div>
-                  <p className="text-[10px] text-slate-600 mt-1">vs last month: +{pctChange}%</p>
-                </motion.div>
-              );
-            })}
+                </div>
+                <div className="h-1.5 w-full bg-[#161621] rounded-full overflow-hidden">
+                  <motion.div 
+                    initial={{ width: 0 }}
+                    animate={{ width: `${60 + Math.random() * 30}%` }}
+                    transition={{ duration: 1, delay: 0.4 + (i * 0.1) }}
+                    className={`h-full bg-gradient-to-r ${stat.color}`} 
+                  />
+                </div>
+              </div>
+            ))}
           </div>
         </motion.div>
 
-        {/* RIGHT — 4 insight cards + chart (45%) */}
-        <div className="flex-1 flex flex-col gap-3">
-          <div className="grid grid-cols-2 gap-3">
-            {insightCards.map((card, i) => (
-              <motion.div key={card.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 + i * 0.05 }}
-                className="bg-[#111118] border border-[#1e1e2e] rounded-xl p-3.5">
-                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">{card.label}</p>
-                <p className={`text-xl font-black ${card.color}`}>{card.value}</p>
-                <p className="text-[10px] text-slate-600 mt-0.5">{card.sub}</p>
-              </motion.div>
-            ))}
+        {/* Right Column: Insights & Chart */}
+        <div className="lg:col-span-5 space-y-6">
+          <div className="grid grid-cols-2 gap-4">
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+              className="bg-[#0b0b0f] border border-[#1e1e2e] rounded-2xl p-4 group hover:bg-white/[0.02] transition-colors">
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Cheapest Win</p>
+              <p className="text-2xl font-black text-emerald-400 tracking-tight">₹3.20</p>
+              <p className="text-[10px] text-slate-500 mt-1">Zara Khan · BuildFast</p>
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}
+              className="bg-[#0b0b0f] border border-[#1e1e2e] rounded-2xl p-4 group hover:bg-white/[0.02] transition-colors">
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Best ROI Channel</p>
+              <p className="text-2xl font-black text-teal-400 tracking-tight">WhatsApp</p>
+              <p className="text-[10px] text-slate-500 mt-1">₹1.40 cost per reply</p>
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
+              className="bg-[#0b0b0f] border border-[#1e1e2e] rounded-2xl p-4 group hover:bg-white/[0.02] transition-colors">
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Cost per Meeting</p>
+              <p className="text-2xl font-black text-indigo-400 tracking-tight">₹5</p>
+              <p className="text-[10px] text-slate-500 mt-1">vs ₹8,000 agency</p>
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}
+              className="bg-[#0b0b0f] border border-[#1e1e2e] rounded-2xl p-4 group hover:bg-white/[0.02] transition-colors">
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Hours Saved</p>
+              <p className="text-2xl font-black text-amber-500 tracking-tight">66h</p>
+              <p className="text-[10px] text-slate-500 mt-1">8.3 working days</p>
+            </motion.div>
           </div>
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}
-            className="bg-[#111118] border border-[#1e1e2e] rounded-xl p-4 flex-1">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-semibold text-white">AI Spend vs Value Delivered</p>
-              <div className="flex items-center gap-3 text-[10px]">
-                <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-red-400 inline-block" /> Spend</span>
-                <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-emerald-400 inline-block" /> Value</span>
+
+          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
+            className="bg-[#0b0b0f] border border-[#1e1e2e] rounded-[24px] p-6 h-[260px] flex flex-col">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-sm font-bold text-white tracking-tight">AI Spend vs Value Delivered</h3>
+              <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-widest">
+                <span className="flex items-center gap-2 text-slate-500 hover:text-red-400 transition-colors">
+                  <span className="w-3 h-0.5 bg-red-400 rounded-full" /> Spend
+                </span>
+                <span className="flex items-center gap-2 text-slate-500 hover:text-emerald-400 transition-colors">
+                  <span className="w-3 h-0.5 bg-emerald-400 rounded-full" /> Value
+                </span>
               </div>
             </div>
-            <ResponsiveContainer width="100%" height={120}>
-              <LineChart data={dailyData} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1a1a26" />
-                <XAxis dataKey="day" tick={{ fill: '#475569', fontSize: 8 }} interval={6} />
-                <YAxis tick={{ fill: '#475569', fontSize: 8 }} />
-                <Tooltip contentStyle={{ background: '#111118', border: '1px solid #1e1e2e', borderRadius: 8, color: '#e2e8f0', fontSize: 10 }}
-                  formatter={(v, n) => [`₹${v}`, n === 'spend' ? 'Spend' : 'Value']} />
-                <Line type="monotone" dataKey="spend" stroke="#f87171" strokeWidth={1.5} dot={false} />
-                <Line type="monotone" dataKey="value" stroke="#34d399" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
+            <div className="flex-1 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={dailyData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#161621" vertical={false} />
+                  <XAxis dataKey="day" hide />
+                  <YAxis hide />
+                  <Tooltip 
+                    contentStyle={{ background: '#111118', border: '1px solid #1e1e2e', borderRadius: 12, boxShadow: '0 10px 15px -3px rgba(0,0,0,0.3)', fontSize: 10 }}
+                    itemStyle={{ padding: '2px 0' }}
+                    formatter={(v, n) => [`₹${v}`, n === 'spend' ? 'Spend' : 'Value']} 
+                  />
+                  <Line type="monotone" dataKey="spend" stroke="#f87171" strokeWidth={2} dot={false} strokeDasharray="5 5" />
+                  <Line type="monotone" dataKey="value" stroke="#34d399" strokeWidth={3} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
           </motion.div>
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}
+          className="lg:col-span-8 bg-[#0b0b0f] border border-[#1e1e2e] rounded-[24px] overflow-hidden">
+          <div className="px-6 py-4 border-b border-[#1e1e2e] flex items-center justify-between bg-white/[0.02]">
+            <div className="flex items-center gap-3">
+              <Cpu className="w-4 h-4 text-violet-400" />
+              <p className="text-sm font-bold text-white tracking-wide">Multi-Model Usage Breakdown</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Zap className={`w-3.5 h-3.5 ${isRoutingActive ? 'text-emerald-400 animate-pulse' : 'text-slate-600'}`} />
+              <span className={`text-[10px] font-black uppercase tracking-widest ${isRoutingActive ? 'text-emerald-400' : 'text-slate-600'}`}>
+                {isRoutingActive ? 'Optimization Engine: ON' : 'Standard Routine'}
+              </span>
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="bg-[#0e0e16] border-b border-[#1e1e2e] text-[9px] text-slate-500 font-black uppercase tracking-[0.2em] px-6">
+                  <th className="px-6 py-4">AI Model</th>
+                  <th className="px-6 py-4">Assigned Task</th>
+                  <th className="px-6 py-4 text-center">Cost Efficiency</th>
+                  <th className="px-6 py-4 text-right">Cost/Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#161621]">
+                {ROUTING_STEPS.map((step, i) => (
+                  <tr key={i} className="group hover:bg-white/[0.01] transition-colors">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-black border ${step.badge} shadow-inner`}>
+                          {step.profile}
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-white">{step.model}</p>
+                          <p className="text-[9px] text-slate-600 font-medium">Auto-optimized for context</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-xs font-medium text-slate-400">{step.task}</td>
+                    <td className="px-6 py-4 text-center">
+                      <div className="flex items-center justify-center gap-1.5">
+                        <div className="w-24 h-1 bg-[#161621] rounded-full overflow-hidden">
+                          <div className="h-full bg-emerald-500/80" style={{ width: `${95 - i*8}%` }} />
+                        </div>
+                        <span className="text-[9px] font-black text-emerald-400">{(95 - i*8)}%</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <p className="text-xs font-mono font-bold text-white">{step.cost}</p>
+                      <p className="text-[9px] text-slate-600 mt-1 uppercase tracking-widest">{parseFloat(step.cost.replace('₹', '')) > 1 ? 'High Value' : 'Optimized'}</p>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </motion.div>
+
+        <motion.div initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.6 }}
+          className="lg:col-span-4 bg-[#0b0b0f] border border-[#1e1e2e] rounded-[24px] p-6 space-y-6">
+          <div className="flex items-center gap-3">
+            <Target className="w-4 h-4 text-amber-500" />
+            <p className="text-sm font-bold text-white tracking-wide">Strategy Control</p>
+          </div>
+          
+          <div className="space-y-4">
+            <div className="relative p-5 rounded-2xl bg-[#0e0e16] border border-[#1e1e2e] group overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl" />
+              <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-1.5">Deployment Mode</p>
+              <p className="text-sm text-white font-black">{isRoutingActive ? 'Smart Multi-Model Routing' : 'GPT-4 Heavy (Legacy)'}</p>
+            </div>
+
+            {!isRoutingActive && (
+              <div className="p-5 rounded-2xl bg-red-500/5 border border-red-500/10 flex items-start gap-4">
+                <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="text-xs font-bold text-red-500 mb-1">Inefficiency Warning</h4>
+                  <p className="text-[10px] text-red-400/60 leading-relaxed font-medium">
+                    Legacy mode costs <span className="text-white">62% more</span> than Smart Routing with no gain in conversion.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {isRoutingActive && (
+              <div className="p-5 rounded-2xl bg-emerald-500/5 border border-emerald-500/10 flex items-start gap-4">
+                <Zap className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="text-xs font-bold text-emerald-500 mb-1">Routing Active</h4>
+                  <p className="text-[10px] text-emerald-400/60 leading-relaxed font-medium">
+                    Optimization engine is balancing cost vs quality across 5 different AI providers live.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-3">
+            <Button onClick={() => toggleSmartRouting(true)} 
+              className={`w-full h-12 rounded-xl transition-all font-bold text-xs uppercase tracking-widest ${isRoutingActive ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20' : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-900/40'}`}>
+              <Zap className={`w-4 h-4 mr-2 ${isRoutingActive ? 'fill-indigo-400 text-indigo-400' : ''}`} />
+              {isRoutingActive ? 'Engine Active' : 'Activate Routing'}
+            </Button>
+            <Button onClick={() => toggleSmartRouting(false)} variant="outline" 
+              className="w-full h-12 rounded-xl border-[#1e1e2e] text-slate-500 hover:bg-red-500/5 hover:text-red-400 hover:border-red-500/20 font-bold text-xs uppercase tracking-widest transition-all">
+              <RotateCcw className="w-4 h-4 mr-2" />
+              Reset Strategy
+            </Button>
+          </div>
+        </motion.div>
       </div>
     </div>
   );

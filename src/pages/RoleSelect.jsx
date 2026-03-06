@@ -3,9 +3,19 @@ import { useNavigate } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import { motion } from 'framer-motion';
 import { Shield, Building2, Zap, ArrowRight } from 'lucide-react';
+import { useCampaign } from '@/components/campaign/CampaignContext';
 
 export default function RoleSelect() {
   const navigate = useNavigate();
+  const { state } = useCampaign();
+
+  const handleClientPortalClick = () => {
+    if (state.onboarding.complete) {
+      navigate(createPageUrl('ClientDashboard'));
+    } else {
+      navigate(createPageUrl('ClientOnboarding'));
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center p-6">
@@ -51,7 +61,7 @@ export default function RoleSelect() {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.3 }}
-            onClick={() => navigate(createPageUrl('ClientDashboard'))}
+            onClick={handleClientPortalClick}
             className="glass-card p-8 text-left group hover:border-emerald-500/40 transition-all duration-300"
           >
             <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center mb-5 group-hover:bg-emerald-500/20 transition-colors">

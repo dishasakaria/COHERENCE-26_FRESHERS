@@ -1,11 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { base44 } from '@/api/base44Client';
-import { X, Mail, Linkedin, MessageCircle, MessageSquare, Phone, ChevronRight, RefreshCw, Edit3, Check, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { X, Mail, Linkedin, MessageCircle, MessageSquare, Phone, ChevronRight, RefreshCw, Edit3, Check, TrendingUp, TrendingDown, Minus, Bot } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import DiscBadge from '../ui-custom/DiscBadge';
 import ScoreBar from '../ui-custom/ScoreBar';
+import { useCampaign } from '../campaign/CampaignContext';
 
 // Lead score calculation
 function calcScore(lead) {
@@ -96,11 +97,26 @@ export default function LeadDetailPanel({ lead, onClose }) {
   const [overrideForm, setOverrideForm] = useState({ disc: lead.disc_type || 'C', interest: lead.interest_score || 0, trust: lead.trust_score || 0, fatigue: lead.fatigue_score || 0, stage: lead.stage || 'new', paused: lead.is_paused || false, notes: lead.notes || '' });
   const [showProposal, setShowProposal] = useState(false);
 
+  const { state: campaignState } = useCampaign();
+  const isRoutingActive = campaignState?.smartRoutingActive;
+
   const score = calcScore(lead);
   const path = getPath(lead);
   const emails = getMockEmails(lead);
   const currentEmail = emails[selectedEmail];
   const isHot = ['hot', 'replied'].includes(lead.stage);
+
+  const getRecommendedModel = (l) => {
+    const s = calcScore(l);
+    if (s < 35 || l.stage === 'nurture') return 'Mistral Small (Cost Saver)';
+    const d = l.disc_category || l.disc_type || 'C';
+    if (d === 'D' && s > 60) return 'Claude 3 Sonnet (High Personalization)';
+    if (d === 'I') return 'GPT-4o Mini (Conversational)';
+    if (d === 'S') return 'GPT-4o Mini (Relationship focused)';
+    if (d === 'C') return 'Claude 3 Sonnet (Detailed messaging)';
+    if (l.stage === 'prospecting') return 'Gemini 1.5 Flash (Research Optimized)';
+    return 'GPT-4o Mini';
+  };
 
   const loadWhy = async (email) => {
     setWhyLoading(true);
@@ -157,14 +173,23 @@ export default function LeadDetailPanel({ lead, onClose }) {
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-full bg-[#1a1a28] flex items-center justify-center text-sm font-bold text-slate-300">{lead.name?.[0]}</div>
           <div>
-            <div className="flex items-center gap-1.5">
-              <p className="text-sm font-semibold text-white">{tierIcon} {lead.name}</p>
-              <DiscBadge type={lead.disc_type} />
+            <div className="flex items-center gap-1.5 min-w-0">
+              <p className="text-sm font-semibold text-white truncate">{tierIcon} {lead.name}</p>
+              <DiscBadge type={lead.disc_category || lead.disc_type} />
             </div>
-            <p className="text-xs text-slate-500">{lead.title} · {lead.company}</p>
+            <div className="flex items-center gap-2 mt-0.5">
+              <p className="text-xs text-slate-500 truncate">{lead.role || lead.title} · {lead.company}</p>
+              <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#1a1a28] border border-[#2a2a3e]">
+                <Mail className="w-2.5 h-2.5 text-slate-500" />
+                <span className="text-[10px] text-slate-400 truncate max-w-[120px]">{lead.email}</span>
+                <button onClick={() => { navigator.clipboard.writeText(lead.email); }} className="hover:text-white transition-colors">
+                  <Edit3 className="w-2.5 h-2.5 text-slate-600 hover:text-indigo-400" />
+                </button>
+              </div>
+            </div>
           </div>
         </div>
-        <button onClick={onClose} className="text-slate-500 hover:text-white transition-colors"><X className="w-4 h-4" /></button>
+        <button onClick={onClose} className="text-slate-500 hover:text-white transition-colors shrink-0 ml-4"><X className="w-4 h-4" /></button>
       </div>
 
       {/* Tabs */}
@@ -204,15 +229,39 @@ export default function LeadDetailPanel({ lead, onClose }) {
               </div>
             </div>
 
-            {/* Scores */}
-            <div className="bg-[#111118] border border-[#1e1e2e] rounded-xl p-4 space-y-3">
-              <p className="text-xs font-semibold text-white">Lead Intelligence</p>
-              {lead.disc_type && (
-                <div className="flex items-center gap-2 p-2.5 rounded-lg bg-[#0e0e16]">
-                  <DiscBadge type={lead.disc_type} showLabel />
-                  <span className="text-xs text-slate-400">{lead.disc_reason || 'DISC profile detected from communication patterns'}</span>
+            {/* Personality Scores */}
+            <div className="bg-[#111118] border border-[#1e1e2e] rounded-xl p-4 space-y-4">
+              <p className="text-xs font-semibold text-white">Personality Insights</p>
+              
+              {lead.ai_summary && (
+                <div className="p-2.5 rounded-lg bg-[#0e0e16] border border-[#1a1a26]">
+                  <p className="text-[11px] text-slate-400 leading-relaxed italic">"{lead.ai_summary}"</p>
                 </div>
               )}
+
+              <div className="grid grid-cols-1 gap-3">
+                <ScoreBar label="Assertiveness" value={lead.assertiveness_score || 0} color="red" />
+                <ScoreBar label="Warmth" value={lead.warmth_score || 0} color="amber" />
+                <ScoreBar label="Analytical" value={lead.analytical_score || 0} color="blue" />
+              </div>
+
+              <div className="pt-2 border-t border-[#1a1a26] space-y-3">
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1.5">Recommended Approach</p>
+                  <p className="text-xs text-slate-300 leading-relaxed">{lead.recommended_approach}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1.5">Best Opening Line</p>
+                  <div className="p-2 rounded bg-indigo-500/5 border border-indigo-500/20">
+                    <p className="text-xs text-indigo-300 leading-relaxed">"{lead.best_opening_line}"</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Outreach Health */}
+            <div className="bg-[#111118] border border-[#1e1e2e] rounded-xl p-4 space-y-3">
+              <p className="text-xs font-semibold text-white">Outreach Health</p>
               <ScoreBar value={lead.interest_score || 0} color="blue" label="Interest" />
               <ScoreBar value={lead.trust_score || 0} color="green" label="Trust" />
               <ScoreBar value={lead.fatigue_score || 0} color="red" label="Fatigue" />
@@ -313,6 +362,14 @@ export default function LeadDetailPanel({ lead, onClose }) {
 
                 {/* Email preview */}
                 <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                  {isRoutingActive && (
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20">
+                      <Bot className="w-3 h-3 text-indigo-400" />
+                      <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-widest">
+                        Model: {getRecommendedModel(lead)}
+                      </span>
+                    </div>
+                  )}
                   <div>
                     <p className="text-xs text-slate-500 mb-1">Subject</p>
                     <p className="text-sm font-bold text-white">{currentEmail.subject}</p>

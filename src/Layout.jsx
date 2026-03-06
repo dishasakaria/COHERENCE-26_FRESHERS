@@ -1,7 +1,7 @@
 import React from 'react';
 import AdminSidebar from './components/layout/AdminSidebar';
 import ClientSidebar from './components/layout/ClientSidebar';
-import { CampaignProvider } from './components/campaign/CampaignContext';
+import ClientHeader from './components/layout/ClientHeader';
 
 const adminPages = ['AdminOverview', 'AdminCompanies', 'AdminAnalytics', 'AdminAIMonitor', 'AdminSystemHealth', 'AdminBilling', 'AdminAlerts', 'AdminSettings'];
 const clientPages = ['ClientDashboard', 'ClientLeads', 'ClientWorkflows', 'ClientPipeline', 'ClientHeatmap', 'ClientLiveFeed', 'ClientScheduledQueue', 'ClientMeetings', 'ClientAnalytics', 'ClientAILog', 'ClientIntervention', 'ClientSettings', 'ClientROI'];
@@ -16,12 +16,13 @@ export default function Layout({ children, currentPageName }) {
   }
 
   return (
-    <CampaignProvider>
-      <div className="min-h-screen bg-[#09090f]">
-        {isAdmin && <AdminSidebar currentPage={currentPageName} />}
-        {isClient && <ClientSidebar currentPage={currentPageName} />}
-        <main className="ml-56 min-h-screen">{children}</main>
+    <div className="min-h-screen bg-[#09090f]">
+      {isAdmin && <AdminSidebar currentPage={currentPageName} />}
+      {isClient && <ClientSidebar currentPage={currentPageName} />}
+      <div className="flex-1 flex flex-col min-h-screen ml-56">
+        {isClient && <ClientHeader />}
+        <main className="flex-1">{children}</main>
       </div>
-    </CampaignProvider>
+    </div>
   );
 }

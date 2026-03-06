@@ -4,6 +4,7 @@ import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, R
 import { Mail, Percent, Users, CalendarCheck, Bot, Activity, Shield, AlertTriangle, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
+import { useCampaign } from '../components/campaign/CampaignContext';
 
 const funnelData = [
   { stage: 'Sent', value: 847 }, { stage: 'Opened', value: 412 }, { stage: 'Clicked', value: 123 },
@@ -40,6 +41,8 @@ const systemEvents = [
 
 export default function ClientAnalytics() {
   const [tab, setTab] = useState('performance');
+  const { state } = useCampaign();
+  const stats = state?.stats;
 
   return (
     <div className="p-6 space-y-5">
@@ -63,11 +66,11 @@ export default function ClientAnalytics() {
           {/* Row 1 — Stat cards */}
           <div className="grid grid-cols-5 gap-3">
             {[
-              { icon: Mail, label: 'Emails Sent', value: '520', color: 'text-indigo-400' },
+              { icon: Mail, label: 'Emails Sent', value: stats?.emailsSent || '520', color: 'text-indigo-400' },
               { icon: Percent, label: 'Reply Rate', value: '8.1%', color: 'text-emerald-400' },
-              { icon: Users, label: 'Hot Leads', value: '8', color: 'text-amber-400' },
-              { icon: CalendarCheck, label: 'Meetings', value: '14', color: 'text-teal-400' },
-              { icon: Bot, label: 'AI Decisions', value: '342', color: 'text-violet-400' },
+              { icon: Users, label: 'Hot Leads', value: stats?.hotLeads || '8', color: 'text-amber-400' },
+              { icon: CalendarCheck, label: 'Meetings', value: stats?.meetings || '14', color: 'text-teal-400' },
+              { icon: Bot, label: 'AI Decisions', value: stats?.aiDecisions || '342', color: 'text-violet-400' },
             ].map((s, i) => (
               <motion.div key={s.label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
                 className="bg-[#111118] border border-[#1e1e2e] rounded-xl p-4">

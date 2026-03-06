@@ -3,6 +3,7 @@ import { Play, Sparkles, Users, Mail, Linkedin, MessageCircle, Phone, MessageSqu
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { motion } from 'framer-motion';
+import { useCampaign } from '../components/campaign/CampaignContext';
 
 const NODE_DEFS = {
   email:       { icon: Mail,          label: 'Send Email',       sub: 'Send Email',       border: '#6366f1', bg: '#1a1a35', text: '#a5b4fc' },
@@ -110,12 +111,27 @@ function WorkflowNode({ node, onDrag }) {
 export default function ClientWorkflows() {
   const [workflowName, setWorkflowName] = useState('Multi-Channel Outreach v2');
   const [nodes, setNodes] = useState(INITIAL_NODES);
+  const { state, updateCampaignStatus } = useCampaign();
 
   const handleDrag = useCallback((id, x, y) => {
     setNodes(prev => prev.map(n => n.id === id ? { ...n, x: Math.max(0, x), y: Math.max(0, y) } : n));
   }, []);
 
+  const addNode = (type) => {
+    const newNode = {
+      id: Date.now(),
+      type,
+      label: NODE_DEFS[type].label,
+      leads: 0,
+      x: 100,
+      y: 100
+    };
+    setNodes([...nodes, newNode]);
+  };
+
   const nodeMap = Object.fromEntries(nodes.map(n => [n.id, n]));
+
+  const isLaunching = state?.campaign?.status === 'active';
 
   return (
     <div className="p-6 h-screen flex flex-col gap-4 overflow-hidden">
@@ -129,8 +145,11 @@ export default function ClientWorkflows() {
           <Button variant="outline" className="border-violet-500/40 text-violet-300 hover:bg-violet-500/10">
             <Sparkles className="w-4 h-4 mr-2" /> AI Draft Workflow
           </Button>
-          <Button className="bg-emerald-600 hover:bg-emerald-700">
-            <Play className="w-4 h-4 mr-2" /> Launch Sequence
+          <Button 
+            onClick={() => updateCampaignStatus(isLaunching ? 'paused' : 'active')}
+            className={isLaunching ? "bg-amber-600 hover:bg-amber-700" : "bg-emerald-600 hover:bg-emerald-700"}
+          >
+            <Play className="w-4 h-4 mr-2" /> {isLaunching ? 'Pause Sequence' : 'Launch Sequence'}
           </Button>
         </div>
       </div>
@@ -153,7 +172,7 @@ export default function ClientWorkflows() {
         {Object.entries(NODE_DEFS).map(([key, def]) => {
           const Icon = def.icon;
           return (
-            <button key={key} style={{ borderColor: `${def.border}50`, color: def.text, background: def.bg }}
+            <button key={key} onClick={() => addNode(key)} style={{ borderColor: `${def.border}50`, color: def.text, background: def.bg }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium hover:opacity-80 transition-opacity shrink-0">
               <Icon size={12} /> {def.label}
             </button>

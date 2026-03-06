@@ -1,15 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Search, Upload, Sparkles, ChevronDown, ChevronRight, Edit3, Check, X, User } from 'lucide-react';
+import { Search, ChevronDown, ChevronRight, Edit3, Check, X, User, Bot, Activity, Clock } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import DiscBadge from '../components/ui-custom/DiscBadge';
 import ScoreBar from '../components/ui-custom/ScoreBar';
 import LeadDetailPanel from '../components/leads/LeadDetailPanel';
-import PersonalityBuilderModal from '../components/leads/PersonalityBuilderModal';
+import { generateMockLeads } from '@/utils/mockLeads';
+import { useCampaign } from '../components/campaign/CampaignContext';
 
 // Lead score
 function calcScore(lead) {
@@ -94,8 +93,8 @@ function KanbanCard({ lead, stages, onMoveStage }) {
         </div>
       </div>
       <div className="space-y-0.5 mb-1.5">
-        <ScoreBar value={lead.interest_score || 0} color="blue" />
-        <ScoreBar value={lead.trust_score || 0} color="green" />
+        <ScoreBar label="Int" value={lead.interest_score || 0} color="blue" />
+        <ScoreBar label="Tru" value={lead.trust_score || 0} color="green" />
       </div>
       {editing && (
         <div className="p-1.5 bg-[#111118] rounded-lg border border-[#1e1e2e]">
@@ -117,30 +116,74 @@ function KanbanCard({ lead, stages, onMoveStage }) {
   );
 }
 
+function LiveFeedPanel() {
+  const { state } = useCampaign();
+  const [isOpen, setIsOpen] = useState(false);
+  const feed = state?.feed || [];
+
+  return (
+    <div className={`mt-auto border-t border-[#1e1e2e] bg-[#0c0c16] transition-all duration-300 ${isOpen ? 'h-64' : 'h-10'}`}>
+      <button 
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between px-4 h-10 hover:bg-white/[0.02]"
+      >
+        <div className="flex items-center gap-2">
+          <Activity className={`w-3.5 h-3.5 ${state?.campaign?.status === 'active' ? 'text-emerald-500 animate-pulse' : 'text-slate-500'}`} />
+          <span className="text-xs font-semibold text-slate-300">Live AI Feed</span>
+          {state?.campaign?.status === 'active' && (
+            <span className="flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+          )}
+        </div>
+        <ChevronDown className={`w-3.5 h-3.5 text-slate-500 transition-transform ${isOpen ? '' : 'rotate-180'}`} />
+      </button>
+
+      {isOpen && (
+        <div className="p-3 overflow-y-auto h-[216px] space-y-2 font-mono scrollbar-hide">
+          {feed.length === 0 ? (
+            <p className="text-[10px] text-slate-600 italic text-center py-8">Waiting for campaign activity...</p>
+          ) : feed.map((item, i) => (
+            <div key={item.id} className="text-[10px] flex items-start gap-2 animate-in fade-in slide-in-from-bottom-1">
+              <span className="text-slate-600 shrink-0">[{item.time}]</span>
+              <span className={`px-1 rounded bg-${item.color}-500/10 text-${item.color}-400 shrink-0 font-bold underline decoration-dotted`}>
+                {item.type.replace('_', ' ').toUpperCase()}
+              </span>
+              <span className="text-white font-medium shrink-0">{item.lead}</span>
+              <span className="text-slate-500 truncate lowercase">{item.detail}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ClientLeads() {
   const [tab, setTab] = useState('leads');
   const [search, setSearch] = useState('');
-  const [aiPrompt, setAiPrompt] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [addMode, setAddMode] = useState(null);
   const [expandedStages, setExpandedStages] = useState(['hot', 'engaged', 'in_sequence']);
   const [selectedLead, setSelectedLead] = useState(null);
-  const [showPersonality, setShowPersonality] = useState(false);
-  const [personality, setPersonality] = useState(null);
   const queryClient = useQueryClient();
 
-  const { data: leads = [] } = useQuery({
+  // Sandbox: Use mock leads
+  const [mockLeads, setMockLeads] = useState(() => generateMockLeads());
+
+  const { data: realLeads = [] } = useQuery({
     queryKey: ['leads'],
     queryFn: () => base44.entities.Lead.list('-created_date', 200),
   });
 
-  const createLeadsMutation = useMutation({
-    mutationFn: (data) => base44.entities.Lead.bulkCreate(data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['leads'] }),
-  });
+  const leads = useMemo(() => {
+    return realLeads.length > 0 ? realLeads : mockLeads;
+  }, [realLeads, mockLeads]);
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, stage }) => base44.entities.Lead.update(id, { stage }),
+    mutationFn: ({ id, stage }) => {
+      if (id.startsWith('lead-')) {
+        setMockLeads(prev => prev.map(l => l.id === id ? { ...l, stage } : l));
+        return Promise.resolve();
+      }
+      return base44.entities.Lead.update(id, { stage });
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['leads'] }),
   });
 
@@ -152,76 +195,13 @@ export default function ClientLeads() {
     !search || l.name?.toLowerCase().includes(search.toLowerCase()) || l.company?.toLowerCase().includes(search.toLowerCase())
   );
 
-  const generateLeads = async () => {
-    if (!aiPrompt.trim()) return;
-    setIsGenerating(true);
-    const res = await base44.integrations.Core.InvokeLLM({
-      prompt: `Generate 8 realistic fictional sales leads matching: "${aiPrompt}". Each lead: name, email, company, title, industry, department, city, linkedin_url, phone_number.`,
-      response_json_schema: { type: "object", properties: { leads: { type: "array", items: { type: "object", properties: { name: { type: "string" }, email: { type: "string" }, company: { type: "string" }, title: { type: "string" }, industry: { type: "string" }, department: { type: "string" }, city: { type: "string" }, linkedin_url: { type: "string" }, phone_number: { type: "string" } } } } } }
-    });
-    if (res?.leads) {
-      const enriched = res.leads.map(l => ({ ...l, interest_score: 0, trust_score: 0, fatigue_score: 0, stage: 'new', channels_used: [] }));
-      await createLeadsMutation.mutateAsync(enriched);
-    }
-    setIsGenerating(false);
-    setAiPrompt('');
-    setAddMode(null);
-  };
-
-  const handleFileUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const { file_url } = await base44.integrations.Core.UploadFile({ file });
-    const result = await base44.integrations.Core.ExtractDataFromUploadedFile({ file_url, json_schema: { type: "array", items: { type: "object", properties: { name: { type: "string" }, email: { type: "string" }, company: { type: "string" }, title: { type: "string" } } } } });
-    if (result?.output) {
-      const data = (Array.isArray(result.output) ? result.output : [result.output]).map(l => ({ ...l, interest_score: 0, trust_score: 0, fatigue_score: 0, stage: 'new', channels_used: [] }));
-      await createLeadsMutation.mutateAsync(data);
-    }
-    setAddMode(null);
-  };
 
   return (
     <div className="p-5 flex flex-col gap-4 h-screen overflow-hidden">
-      {/* Header */}
       <div className="flex items-center justify-between shrink-0">
         <h1 className="text-2xl font-semibold text-white">Leads & Pipeline</h1>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setShowPersonality(true)} className="border-violet-500/40 text-violet-300 hover:bg-violet-500/10 text-xs">
-            <User className="w-3.5 h-3.5 mr-1.5" /> My Outreach Identity
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setAddMode(addMode === 'upload' ? null : 'upload')} className="border-[#2a2a3e] text-slate-300 hover:bg-[#1a1a28] text-xs">
-            <Upload className="w-3.5 h-3.5 mr-1.5" /> Upload CSV
-          </Button>
-          <Button size="sm" onClick={() => setAddMode(addMode === 'ai' ? null : 'ai')} className="bg-indigo-600 hover:bg-indigo-700 text-xs">
-            <Sparkles className="w-3.5 h-3.5 mr-1.5" /> AI Find Leads
-          </Button>
-        </div>
       </div>
 
-      {/* Add mode panels */}
-      <AnimatePresence>
-        {addMode === 'ai' && (
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
-            className="bg-[#111118] border border-[#1e1e2e] rounded-2xl p-4 overflow-hidden shrink-0">
-            <p className="text-sm font-medium text-white mb-3">Describe your ideal leads</p>
-            <Textarea placeholder="e.g. 'SaaS founders in Mumbai with 10–50 employees'" value={aiPrompt} onChange={e => setAiPrompt(e.target.value)}
-              className="bg-[#0a0a0f] border-[#2a2a3e] text-white placeholder:text-slate-600 mb-3 min-h-[60px] rounded-xl" />
-            <Button onClick={generateLeads} disabled={isGenerating} className="bg-indigo-600 hover:bg-indigo-700 text-sm">
-              {isGenerating ? 'Generating...' : <><Sparkles className="w-4 h-4 mr-2" />Find Leads</>}
-            </Button>
-          </motion.div>
-        )}
-        {addMode === 'upload' && (
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
-            className="bg-[#111118] border border-[#1e1e2e] rounded-2xl overflow-hidden shrink-0">
-            <label className="block p-6 text-center cursor-pointer hover:bg-white/[0.02]">
-              <Upload className="w-7 h-7 text-slate-600 mx-auto mb-2" />
-              <p className="text-sm text-slate-400">Drop CSV/Excel here or click to browse</p>
-              <input type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleFileUpload} />
-            </label>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Tabs */}
       <div className="flex gap-1 shrink-0">
@@ -273,11 +253,14 @@ export default function ClientLeads() {
                                   <ResearchDot depth={lead.research_depth || 'basic'} />
                                   <div className="w-7 h-7 rounded-full bg-[#1a1a28] flex items-center justify-center text-xs font-bold text-slate-300 shrink-0">{lead.name?.[0]}</div>
                                   <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium text-white truncate">{tierIcon} {lead.name}</p>
+                                    <div className="flex items-center gap-1.5">
+                                      <p className="text-sm font-medium text-white truncate">{tierIcon} {lead.name}</p>
+                                      <DiscBadge type={lead.disc_category || lead.disc_type} />
+                                    </div>
                                     <p className="text-[11px] text-slate-500 truncate">{lead.title} · {lead.company}</p>
+                                    <p className="text-[10px] text-slate-600 truncate">{lead.email}</p>
                                   </div>
                                   <PathBadge lead={lead} />
-                                  <DiscBadge type={lead.disc_type} />
                                   <ScoreBadge score={score} />
                                 </div>
                               );
@@ -285,16 +268,14 @@ export default function ClientLeads() {
                           </div>
                         </motion.div>
                       )}
-                      {isOpen && stageLeads.length === 0 && (
-                        <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} className="overflow-hidden">
-                          <div className="border-t border-[#1a1a26] px-4 py-4 text-center text-xs text-slate-600">No leads in this stage</div>
-                        </motion.div>
-                      )}
                     </AnimatePresence>
                   </div>
                 );
               })}
             </div>
+
+            {/* LIVE FEED PANEL */}
+            <LiveFeedPanel />
           </div>
 
           {/* Right — Lead Detail Panel (60%) */}
@@ -342,13 +323,6 @@ export default function ClientLeads() {
             })}
           </div>
         </div>
-      )}
-
-      {showPersonality && (
-        <PersonalityBuilderModal
-          onClose={() => setShowPersonality(false)}
-          onSave={(p) => { setPersonality(p); setShowPersonality(false); }}
-        />
       )}
     </div>
   );

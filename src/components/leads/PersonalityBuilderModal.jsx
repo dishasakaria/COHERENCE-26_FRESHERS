@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { base44 } from '@/api/base44Client';
+import { generateOutreachIdentity } from '@/utils/api';
 import { Slider } from '@/components/ui/slider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { AlertCircle, CheckCircle2, Sparkles, Loader2, Award, ArrowRight } from 'lucide-react';
 
 const TONES = ['Confident', 'Humble', 'Witty', 'Direct', 'Warm', 'Formal', 'Conversational', 'Bold', 'Empathetic', 'Data-driven'];
 const PHILOSOPHIES = [
@@ -17,33 +18,44 @@ const PHILOSOPHIES = [
 
 export default function PersonalityBuilderModal({ onClose, onSave }) {
   const [step, setStep] = useState(1);
-  const [form1, setForm1] = useState({ name: '', description: '', target: '' });
-  const [form2, setForm2] = useState({ tones: [], philosophy: '', length: 'Medium', cta: 'Soft', formality: 30 });
+  const [form, setForm] = useState({ 
+    name: '', 
+    description: '', 
+    target: '',
+    tones: [], 
+    philosophy: '', 
+    length: 'Medium', 
+    cta: 'Soft', 
+    formality: 30 
+  });
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const [personality, setPersonality] = useState(null);
 
-  const canNext1 = form1.name.trim() && form1.description.trim() && form1.target.trim();
-  const canNext2 = form2.tones.length > 0 && form2.philosophy;
+  const canNext1 = form.name.trim() && form.description.trim() && form.target.trim() && form.tones.length > 0 && form.philosophy;
 
-  const toggleTone = (t) => setForm2(p => ({ ...p, tones: p.tones.includes(t) ? p.tones.filter(x => x !== t) : [...p.tones, t] }));
+  const toggleTone = (t) => setForm(p => ({ ...p, tones: p.tones.includes(t) ? p.tones.filter(x => x !== t) : [...p.tones, t] }));
 
   const buildPersonality = async () => {
-    setStep(3);
     setLoading(true);
-    const res = await base44.integrations.Core.InvokeLLM({
-      prompt: `Based on this sender profile — company: ${form1.name}, product: ${form1.description}, target: ${form1.target}, tone: ${form2.tones.join(', ')}, philosophy: ${form2.philosophy}, length: ${form2.length}, CTA: ${form2.cta}, formality: ${form2.formality}/100 — generate an outreach personality card. Return ONLY JSON with these exact keys: voice_summary (2 sentences), dos (array of 5 rules), donts (array of 5 rules), sample_opener (one perfect example opening line), adjectives (array of 5 words).`,
-      response_json_schema: {
-        type: 'object', properties: {
-          voice_summary: { type: 'string' },
-          dos: { type: 'array', items: { type: 'string' } },
-          donts: { type: 'array', items: { type: 'string' } },
-          sample_opener: { type: 'string' },
-          adjectives: { type: 'array', items: { type: 'string' } },
-        }
-      }
-    });
-    setPersonality(res);
-    setLoading(false);
+    setError(null);
+    try {
+      const data = {
+        startup_name: form.name,
+        what_you_do: form.description,
+        target_customer: form.target,
+        tones: form.tones.join(', '),
+        philosophy: form.philosophy
+      };
+      
+      const res = await generateOutreachIdentity(data);
+      setPersonality(res);
+      setStep(2);
+    } catch (err) {
+      setError(err.message || 'Something went wrong while generating your identity. Please ensure the n8n backend is running at http://localhost:5678');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSave = () => {
@@ -70,155 +82,214 @@ export default function PersonalityBuilderModal({ onClose, onSave }) {
 
         <div className="flex-1 overflow-y-auto">
           <AnimatePresence mode="wait">
-            {/* Step 1 */}
+            {/* Step 1: Input Form */}
             {step === 1 && (
-              <motion.div key="s1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="p-6 space-y-4">
-                <h2 className="text-xl font-bold text-white">Who Are You?</h2>
-                <div>
-                  <label className="text-xs text-slate-400 mb-1.5 block">Company / Startup name</label>
-                  <Input value={form1.name} onChange={e => setForm1(p => ({ ...p, name: e.target.value }))}
-                    placeholder="e.g. FlowReach AI" className="bg-[#0a0a0f] border-[#2a2a3e] text-white" />
+              <motion.div key="s1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="p-6 space-y-6">
+                <div className="space-y-4">
+                  <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-indigo-400" />
+                    Define Your Identity
+                  </h2>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="col-span-2">
+                       <label className="text-xs text-slate-400 mb-1.5 block font-medium">Company / Startup name</label>
+                       <Input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+                        placeholder="e.g. FlowReach AI" className="bg-[#0a0a0f] border-[#2a2a3e] text-white focus:border-indigo-500 h-10" />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="text-xs text-slate-400 mb-1.5 block font-medium">What you do</label>
+                      <Textarea value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
+                        placeholder="We help B2B companies automate their outreach..." rows={2}
+                        className="bg-[#0a0a0f] border-[#2a2a3e] text-white resize-none focus:border-indigo-500" />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="text-xs text-slate-400 mb-1.5 block font-medium">Your target customer</label>
+                      <Input value={form.target} onChange={e => setForm(p => ({ ...p, target: e.target.value }))}
+                        placeholder="e.g. SaaS founders with 10-50 employees" className="bg-[#0a0a0f] border-[#2a2a3e] text-white focus:border-indigo-500 h-10" />
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label className="text-xs text-slate-400 mb-1.5 block">What you do</label>
-                  <Textarea value={form1.description} onChange={e => setForm1(p => ({ ...p, description: e.target.value }))}
-                    placeholder="We help B2B companies automate their outreach..." rows={3}
-                    className="bg-[#0a0a0f] border-[#2a2a3e] text-white resize-none" />
-                </div>
-                <div>
-                  <label className="text-xs text-slate-400 mb-1.5 block">Your target customer</label>
-                  <Input value={form1.target} onChange={e => setForm1(p => ({ ...p, target: e.target.value }))}
-                    placeholder="e.g. SaaS founders with 10-50 employees" className="bg-[#0a0a0f] border-[#2a2a3e] text-white" />
-                </div>
-              </motion.div>
-            )}
 
-            {/* Step 2 */}
-            {step === 2 && (
-              <motion.div key="s2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="p-6 space-y-5">
-                <h2 className="text-xl font-bold text-white">Your Outreach Style</h2>
-                <div>
-                  <label className="text-xs text-slate-400 mb-2 block">Select your tone (multi-select)</label>
-                  <div className="flex flex-wrap gap-2">
-                    {TONES.map(t => (
-                      <button key={t} onClick={() => toggleTone(t)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors ${form2.tones.includes(t) ? 'bg-violet-600 border-violet-500 text-white' : 'border-[#2a2a3e] text-slate-400 hover:border-slate-500'}`}>
-                        {t}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <label className="text-xs text-slate-400 mb-2 block">Your outreach philosophy</label>
-                  <div className="space-y-2">
-                    {PHILOSOPHIES.map(p => (
-                      <button key={p} onClick={() => setForm2(prev => ({ ...prev, philosophy: p }))}
-                        className={`w-full text-left px-3.5 py-2.5 rounded-xl border text-sm transition-colors ${form2.philosophy === p ? 'border-violet-500 bg-violet-500/10 text-white' : 'border-[#2a2a3e] text-slate-400 hover:border-slate-500'}`}>
-                        {p}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-4 pt-2">
+                  <h2 className="text-lg font-bold text-white">Outreach Style</h2>
                   <div>
-                    <label className="text-xs text-slate-400 mb-2 block">Email length</label>
-                    <div className="flex gap-1">
-                      {['Short', 'Medium', 'Long'].map(l => (
-                        <button key={l} onClick={() => setForm2(p => ({ ...p, length: l }))}
-                          className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors ${form2.length === l ? 'bg-indigo-600 border-indigo-500 text-white' : 'border-[#2a2a3e] text-slate-400'}`}>
-                          {l}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-xs text-slate-400 mb-2 block">CTA style</label>
-                    <div className="flex gap-1">
-                      {['Soft', 'Direct', 'No ask'].map(c => (
-                        <button key={c} onClick={() => setForm2(p => ({ ...p, cta: c }))}
-                          className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors ${form2.cta === c ? 'bg-indigo-600 border-indigo-500 text-white' : 'border-[#2a2a3e] text-slate-400'}`}>
-                          {c}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                <div>
-                  <div className="flex justify-between text-xs text-slate-500 mb-2">
-                    <span>Hey [first name]!</span>
-                    <span>Formality</span>
-                    <span>Dear Mr./Ms. [last name],</span>
-                  </div>
-                  <Slider value={[form2.formality]} onValueChange={([v]) => setForm2(p => ({ ...p, formality: v }))} max={100} step={1}
-                    className="[&_[role=slider]]:bg-white [&_[role=slider]]:border-2 [&_[role=slider]]:border-indigo-500 [&_[role=slider]]:w-5 [&_[role=slider]]:h-5" />
-                </div>
-              </motion.div>
-            )}
-
-            {/* Step 3 */}
-            {step === 3 && (
-              <motion.div key="s3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="p-6">
-                {loading ? (
-                  <div className="space-y-4">
-                    <p className="text-sm text-slate-400 text-center mb-6">Building your personality card...</p>
-                    {[1, 2, 3].map(i => (
-                      <div key={i} className="h-4 bg-[#1a1a28] rounded-lg animate-pulse" style={{ width: `${90 - i * 10}%` }} />
-                    ))}
-                    <div className="h-20 bg-[#1a1a28] rounded-xl animate-pulse mt-4" />
-                    <div className="grid grid-cols-2 gap-3 mt-4">
-                      <div className="h-32 bg-[#1a1a28] rounded-xl animate-pulse" />
-                      <div className="h-32 bg-[#1a1a28] rounded-xl animate-pulse" />
-                    </div>
-                  </div>
-                ) : personality && (
-                  <div className="space-y-5">
-                    <div>
-                      <p className="text-xs text-indigo-400 font-semibold uppercase tracking-wider mb-1">Your Outreach Voice</p>
-                      <h2 className="text-xl font-bold text-white mb-3">Personality Card</h2>
-                      <div className="bg-[#1a1a28] border border-violet-500/30 rounded-xl px-5 py-4">
-                        <p className="text-base text-white italic">"{personality.sample_opener}"</p>
-                        <p className="text-xs text-slate-400 mt-2 leading-relaxed">{personality.voice_summary}</p>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="bg-[#0e0e16] border border-emerald-500/20 rounded-xl p-4">
-                        <p className="text-xs font-semibold text-emerald-400 mb-2">✅ Always Do</p>
-                        <ul className="space-y-1.5">
-                          {(personality.dos || []).map((d, i) => (
-                            <li key={i} className="text-xs text-slate-300 flex gap-1.5"><span className="text-emerald-500 shrink-0">✓</span>{d}</li>
-                          ))}
-                        </ul>
-                      </div>
-                      <div className="bg-[#0e0e16] border border-red-500/20 rounded-xl p-4">
-                        <p className="text-xs font-semibold text-red-400 mb-2">❌ Never Do</p>
-                        <ul className="space-y-1.5">
-                          {(personality.donts || []).map((d, i) => (
-                            <li key={i} className="text-xs text-slate-300 flex gap-1.5"><span className="text-red-500 shrink-0">✗</span>{d}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
+                    <label className="text-xs text-slate-400 mb-2 block font-medium">Select your tones (min 1)</label>
                     <div className="flex flex-wrap gap-2">
-                      {(personality.adjectives || []).map((a, i) => (
-                        <span key={i} className="px-3 py-1 rounded-full bg-violet-600/20 border border-violet-500/30 text-xs text-violet-300 font-medium">{a}</span>
+                      {TONES.map(t => (
+                        <button key={t} onClick={() => toggleTone(t)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${form.tones.includes(t) ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-transparent border-[#2a2a3e] text-slate-400 hover:border-slate-500'}`}>
+                          {t}
+                        </button>
                       ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400 mb-2 block font-medium">Outreach philosophy</label>
+                    <div className="space-y-2">
+                      {PHILOSOPHIES.map(p => (
+                        <button key={p} onClick={() => setForm(prev => ({ ...prev, philosophy: p }))}
+                          className={`w-full text-left px-3.5 py-2.5 rounded-xl border text-sm transition-all ${form.philosophy === p ? 'border-indigo-500 bg-indigo-500/10 text-white' : 'border-[#2a2a3e] text-slate-400 hover:border-slate-500'}`}>
+                          {p}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {error && (
+                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                    className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/30 flex gap-3 items-center">
+                    <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />
+                    <p className="text-xs text-red-200">{error}</p>
+                  </motion.div>
+                )}
+              </motion.div>
+            )}
+
+            {/* Step 2: Generated Identity Card */}
+            {step === 2 && (
+              <motion.div key="s2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="p-6">
+                {personality && (
+                  <div className="space-y-5">
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <p className="text-xs text-indigo-400 font-bold uppercase tracking-widest mb-1">Generated Card</p>
+                        <h2 className="text-2xl font-black text-white">Outreach Identity</h2>
+                      </div>
+                      <div className="w-10 h-10 rounded-full bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center">
+                        <Award className="w-6 h-6 text-indigo-500" />
+                      </div>
+                    </div>
+
+                    <div className="bg-[#1a1a28] border border-indigo-500/30 rounded-2xl px-6 py-5 shadow-2xl relative overflow-hidden">
+                      <div className="absolute top-0 right-0 p-4 opacity-10">
+                        <Sparkles className="w-16 h-16 text-white" />
+                      </div>
+                      <p className="text-xs text-indigo-300 font-bold uppercase mb-2">Example Outreach Message</p>
+                      <p className="text-base text-white font-medium italic leading-relaxed mb-4">"{personality.sample_opener}"</p>
+                      
+                      <div className="h-px bg-white/10 my-4" />
+                      
+                      <p className="text-xs text-slate-400 font-bold uppercase mb-2">Outreach Voice Description</p>
+                      <p className="text-sm text-slate-300 leading-relaxed">{personality.voice_summary}</p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-[#0e0e16] border border-emerald-500/20 rounded-2xl p-4">
+                        <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                          <CheckCircle2 className="w-3 h-3" /> Writing Rules
+                        </p>
+                        <ul className="space-y-2">
+                          {(personality.dos || []).map((d, i) => (
+                            <li key={i} className="text-xs text-slate-400 flex gap-2">
+                              <span className="text-emerald-500">•</span> {d}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div className="bg-[#0e0e16] border border-red-500/20 rounded-2xl p-4">
+                        <p className="text-[10px] font-black text-red-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                          <AlertCircle className="w-3 h-3" /> Things to Avoid
+                        </p>
+                        <ul className="space-y-2">
+                          {(personality.donts || []).map((d, i) => (
+                            <li key={i} className="text-xs text-slate-400 flex gap-2">
+                              <span className="text-red-500">•</span> {d}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Brand Voice Words</p>
+                      <div className="flex flex-wrap gap-2">
+                        {(personality.adjectives || []).map((a, i) => (
+                          <span key={i} className="px-3 py-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-[11px] text-indigo-300 font-bold">
+                            {a}
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 )}
+              </motion.div>
+            )}
+
+            {/* Step 3: Final Settings / Confirmation */}
+            {step === 3 && (
+              <motion.div key="s3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="p-6 space-y-6">
+                <div className="text-center py-4">
+                  <div className="w-16 h-16 bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-emerald-500/20">
+                    <CheckCircle2 className="w-8 h-8 text-emerald-500" />
+                  </div>
+                  <h2 className="text-2xl font-bold text-white mb-2">Final Touches</h2>
+                  <p className="text-sm text-slate-400">Your AI outreach identity is ready. Review your global preferences before finishing.</p>
+                </div>
+
+                <div className="space-y-6">
+                  <div>
+                    <div className="flex justify-between text-xs text-slate-500 mb-3 uppercase font-bold tracking-wider">
+                      <span>Casual</span>
+                      <span>Formality</span>
+                      <span>Professional</span>
+                    </div>
+                    <Slider value={[form.formality]} onValueChange={([v]) => setForm(p => ({ ...p, formality: v }))} max={100} step={1}
+                      className="[&_[role=slider]]:bg-white [&_[role=slider]]:border-2 [&_[role=slider]]:border-indigo-500 [&_[role=slider]]:w-5 [&_[role=slider]]:h-5" />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs text-slate-400 mb-2 block font-medium">Email length</label>
+                      <div className="flex gap-1">
+                        {['Short', 'Medium', 'Long'].map(l => (
+                          <button key={l} onClick={() => setForm(p => ({ ...p, length: l }))}
+                            className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors ${form.length === l ? 'bg-indigo-600 border-indigo-500 text-white' : 'border-[#2a2a3e] text-slate-400'}`}>
+                            {l}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-400 mb-2 block font-medium">CTA style</label>
+                      <div className="flex gap-1">
+                        {['Soft', 'Direct', 'No ask'].map(c => (
+                          <button key={c} onClick={() => setForm(p => ({ ...p, cta: c }))}
+                            className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors ${form.cta === c ? 'bg-indigo-600 border-indigo-500 text-white' : 'border-[#2a2a3e] text-slate-400'}`}>
+                            {c}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </motion.div>
             )}
           </AnimatePresence>
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-[#1e1e2e] flex justify-between shrink-0">
-          <Button variant="ghost" onClick={() => setStep(s => Math.max(1, s - 1))} disabled={step === 1 || loading} className="text-slate-400">
+        <div className="px-6 py-4 border-t border-[#1e1e2e] flex justify-between items-center shrink-0">
+          <Button variant="ghost" onClick={() => setStep(s => Math.max(1, s - 1))} disabled={step === 1 || loading} className="text-slate-500">
             ← Back
           </Button>
-          {step === 1 && <Button onClick={() => setStep(2)} disabled={!canNext1} className="bg-indigo-600 hover:bg-indigo-700">Next →</Button>}
-          {step === 2 && <Button onClick={buildPersonality} disabled={!canNext2} className="bg-indigo-600 hover:bg-indigo-700">Next →</Button>}
-          {step === 3 && !loading && personality && (
-            <Button onClick={handleSave} className="bg-emerald-600 hover:bg-emerald-700">Save & Start Outreach</Button>
+          
+          {step === 1 && (
+            <Button onClick={buildPersonality} disabled={!canNext1 || loading} className="bg-indigo-600 hover:bg-indigo-700 min-w-[140px]">
+              {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Generating...</> : <><Sparkles className="w-4 h-4 mr-2" /> Generate Card</>}
+            </Button>
+          )}
+
+          {step === 2 && (
+            <Button onClick={() => setStep(3)} className="bg-indigo-600 hover:bg-indigo-700">
+              Next Step <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+          )}
+
+          {step === 3 && (
+            <Button onClick={handleSave} className="bg-emerald-600 hover:bg-emerald-700">
+              Save & Start Outreach
+            </Button>
           )}
         </div>
       </motion.div>

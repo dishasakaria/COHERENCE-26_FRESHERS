@@ -61,8 +61,8 @@ import ClientDashboard from './pages/ClientDashboard';
 import ClientHeatmap from './pages/ClientHeatmap';
 import ClientIntervention from './pages/ClientIntervention';
 import ClientLeads from './pages/ClientLeads';
-import ClientLiveFeed from './pages/ClientLiveFeed';
 import ClientMeetings from './pages/ClientMeetings';
+import ClientOnboarding from './pages/ClientOnboarding';
 import ClientPipeline from './pages/ClientPipeline';
 import ClientROI from './pages/ClientROI';
 import ClientScheduledQueue from './pages/ClientScheduledQueue';
@@ -87,8 +87,8 @@ export const PAGES = {
     "ClientHeatmap": ClientHeatmap,
     "ClientIntervention": ClientIntervention,
     "ClientLeads": ClientLeads,
-    "ClientLiveFeed": ClientLiveFeed,
     "ClientMeetings": ClientMeetings,
+    "ClientOnboarding": ClientOnboarding,
     "ClientPipeline": ClientPipeline,
     "ClientROI": ClientROI,
     "ClientScheduledQueue": ClientScheduledQueue,

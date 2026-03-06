@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
-import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Percent, CalendarCheck, Users, Calendar, Clock, AlertTriangle, Bot, HelpCircle, Pause, BarChart3, StopCircle } from 'lucide-react';
+import { Send, Percent, CalendarCheck, Users, Calendar, Clock, AlertTriangle, Bot, HelpCircle, Pause, BarChart3, StopCircle, User, Upload, Sparkles, X } from 'lucide-react';
 import AIChatbot from '../components/dashboard/AIChatbot';
 import HowItWorksModal from '../components/dashboard/HowItWorksModal';
 import { useCampaign } from '../components/campaign/CampaignContext';
 import DemoFlow from '../components/demo/DemoFlow';
+import PersonalityBuilderModal from '../components/leads/PersonalityBuilderModal';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 
 function LiveNumber({ value, className }) {
   const [display, setDisplay] = useState(value);
@@ -52,13 +55,55 @@ const aiInsightCards = [
 ];
 
 export default function ClientDashboard() {
-  const [showHowItWorks, setShowHowItWorks] = useState(false);
-  const [showDemo, setShowDemo] = useState(false);
+  const [addModeLocal, setAddModeLocal] = useState(null);
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  
   const [briefing, setBriefing] = useState("Your campaign is performing above average. 6 replies in the last 24 hours — 4 show strong buying intent. Sarah Chen has moved to nurture. 3 leads paused due to fatigue. AI confidence: 79% avg. One decision flagged for review.");
-  const { state, updateCampaignStatus } = useCampaign();
+  const { state, updateCampaignStatus, setUIState } = useCampaign();
+  const queryClient = useQueryClient();
+
+  const addMode = state.ui.addMode;
+  const showPersonality = state.ui.showPersonality;
+  const showHowItWorks = state.ui.showHowItWorks;
+  const showDemo = state.ui.showDemo || false;
+
   const globalStats = state?.stats;
   const campaign = state?.campaign;
   const feed = state?.feed || [];
+
+  const createLeadsMutation = useMutation({
+    mutationFn: (data) => base44.entities.Lead.bulkCreate(data),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['leads'] }),
+  });
+
+  const generateLeads = async () => {
+    if (!aiPrompt.trim()) return;
+    setIsGenerating(true);
+    const res = await base44.integrations.Core.InvokeLLM({
+      prompt: `Generate 8 realistic fictional sales leads matching: "${aiPrompt}". Each lead: name, email, company, title, industry, department, city, linkedin_url, phone_number.`,
+      response_json_schema: { type: "object", properties: { leads: { type: "array", items: { type: "object", properties: { name: { type: "string" }, email: { type: "string" }, company: { type: "string" }, title: { type: "string" }, industry: { type: "string" }, department: { type: "string" }, city: { type: "string" }, linkedin_url: { type: "string" }, phone_number: { type: "string" } } } } } }
+    });
+    if (res?.leads) {
+      const enriched = res.leads.map(l => ({ ...l, interest_score: 0, trust_score: 0, fatigue_score: 0, stage: 'new', channels_used: [] }));
+      await createLeadsMutation.mutateAsync(enriched);
+    }
+    setIsGenerating(false);
+    setAiPrompt('');
+    setUIState('addMode', null);
+  };
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const { file_url } = await base44.integrations.Core.UploadFile({ file });
+    const result = await base44.integrations.Core.ExtractDataFromUploadedFile({ file_url, json_schema: { type: "array", items: { type: "object", properties: { name: { type: "string" }, email: { type: "string" }, company: { type: "string" }, title: { type: "string" } } } } });
+    if (result?.output) {
+      const data = (Array.isArray(result.output) ? result.output : [result.output]).map(l => ({ ...l, interest_score: 0, trust_score: 0, fatigue_score: 0, stage: 'new', channels_used: [] }));
+      await createLeadsMutation.mutateAsync(data);
+    }
+    setUIState('addMode', null);
+  };
 
   const hoursAgo = campaign?.startTime
     ? Math.floor((Date.now() - campaign.startTime) / 3600000)
@@ -74,12 +119,33 @@ export default function ClientDashboard() {
   return (
     <div className="p-6 space-y-5 max-w-7xl mx-auto">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-white">Dashboard</h1>
-        <button onClick={() => setShowHowItWorks(true)}
-          className="w-8 h-8 rounded-full border border-[#2a2a3e] text-slate-500 hover:text-white hover:border-slate-400 flex items-center justify-center transition-colors">
-          <HelpCircle className="w-4 h-4" />
-        </button>
+        <h1 className="text-2xl font-semibold text-white">Dashboard Overview</h1>
       </div>
+
+      {/* Add mode panels */}
+      <AnimatePresence>
+        {addMode === 'ai' && (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+            className="bg-[#111118] border border-[#1e1e2e] rounded-2xl p-4 overflow-hidden shrink-0">
+            <p className="text-sm font-medium text-white mb-3">Describe your ideal leads</p>
+            <Textarea placeholder="e.g. 'SaaS founders in Mumbai with 10–50 employees'" value={aiPrompt} onChange={e => setAiPrompt(e.target.value)}
+              className="bg-[#0a0a0f] border-[#2a2a3e] text-white placeholder:text-slate-600 mb-3 min-h-[60px] rounded-xl" />
+            <Button onClick={generateLeads} disabled={isGenerating} className="bg-indigo-600 hover:bg-indigo-700 text-sm">
+              {isGenerating ? 'Generating...' : <><Sparkles className="w-4 h-4 mr-2" />Find Leads</>}
+            </Button>
+          </motion.div>
+        )}
+        {addMode === 'upload' && (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+            className="bg-[#111118] border border-[#1e1e2e] rounded-2xl overflow-hidden shrink-0">
+            <label className="block p-6 text-center cursor-pointer hover:bg-white/[0.02]">
+              <Upload className="w-7 h-7 text-slate-600 mx-auto mb-2" />
+              <p className="text-sm text-slate-400">Drop CSV/Excel here or click to browse</p>
+              <input type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleFileUpload} />
+            </label>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Campaign Status Banner */}
       <AnimatePresence>
@@ -140,7 +206,7 @@ export default function ClientDashboard() {
       {/* Start Demo Button */}
       <motion.button
         initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
-        onClick={() => setShowDemo(true)}
+        onClick={() => setUIState('showDemo', true)}
         className="w-full py-4 rounded-2xl bg-gradient-to-r from-violet-600 to-violet-500 hover:from-violet-500 hover:to-violet-400 text-white font-bold text-base transition-all shadow-lg shadow-violet-500/20 hover:shadow-violet-500/40 flex items-center justify-center gap-2">
         ▶ Start Demo — Launch Your First AI Campaign
       </motion.button>
@@ -222,32 +288,11 @@ export default function ClientDashboard() {
         </motion.div>
       </div>
 
-      {/* Mini Live Ticker */}
-      <div className="bg-[#0c0c12] border border-[#1e1e2e] rounded-xl overflow-hidden h-8 flex items-center">
-        <span className="text-[10px] text-slate-600 px-3 shrink-0 border-r border-[#1e1e2e] h-full flex items-center">LIVE</span>
-        <div className="flex-1 overflow-hidden relative h-full flex items-center">
-          <div className="ticker-scroll whitespace-nowrap text-[11px] text-slate-500 flex items-center gap-8">
-            {[...feed, ...feed].map((event, i) => (
-              <span key={i} className="inline-flex items-center gap-1.5">
-                <span className={`inline-block w-1.5 h-1.5 rounded-full ${
-                  event.color === 'green' ? 'bg-emerald-500' : event.color === 'blue' ? 'bg-blue-500' :
-                  event.color === 'purple' ? 'bg-violet-500' : event.color === 'orange' ? 'bg-orange-500' :
-                  event.color === 'red' ? 'bg-red-500' : 'bg-slate-500'
-                }`} />
-                {event.type === 'email_sent' ? '📧' : event.type === 'email_opened' ? '👁' : event.type === 'reply_received' ? '💬' : event.type === 'hot_lead' ? '🔥' : event.type === 'ai_decision' ? '🤖' : '⚡'}
-                {' '}{event.detail} → <span className="text-slate-400">{event.lead}</span>
-                <span className="text-slate-700 ml-1">·</span>
-                <span className="text-slate-700">{event.time}</span>
-              </span>
-            ))}
-          </div>
-        </div>
-      </div>
-
       <AIChatbot />
-      {showHowItWorks && <HowItWorksModal onClose={() => setShowHowItWorks(false)} />}
+      {showHowItWorks && <HowItWorksModal onClose={() => setUIState('showHowItWorks', false)} />}
+      {showPersonality && <PersonalityBuilderModal onClose={() => setUIState('showPersonality', false)} onSave={() => setUIState('showPersonality', false)} />}
       <AnimatePresence>
-        {showDemo && <DemoFlow onClose={() => setShowDemo(false)} />}
+        {showDemo && <DemoFlow onClose={() => setUIState('showDemo', false)} />}
       </AnimatePresence>
     </div>
   );

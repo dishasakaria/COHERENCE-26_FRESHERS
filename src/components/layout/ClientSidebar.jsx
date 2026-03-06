@@ -6,9 +6,8 @@ import { useCampaign } from '../campaign/CampaignContext';
 
 const navItems = [
   { icon: Home, label: 'Dashboard', page: 'ClientDashboard' },
-  { icon: Users, label: 'Leads & Pipeline', page: 'ClientLeads' },
   { icon: GitBranch, label: 'Workflows', page: 'ClientWorkflows' },
-  { icon: Radio, label: 'Live AI Feed', page: 'ClientLiveFeed' },
+  { icon: Users, label: 'Leads & Pipeline', page: 'ClientLeads' },
   { icon: Thermometer, label: 'Lead Heatmap', page: 'ClientHeatmap' },
   { icon: BarChart3, label: 'Analytics', page: 'ClientAnalytics' },
   { icon: AlertTriangle, label: 'Interventions', page: 'ClientIntervention' },

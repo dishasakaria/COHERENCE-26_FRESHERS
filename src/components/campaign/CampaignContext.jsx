@@ -45,6 +45,22 @@ const INITIAL_STATE = {
     proposalsGenerated: 5, callScripts: 28,
   },
   pageBadges: { ClientIntervention: false, ClientLiveFeed: false, ClientLeads: false },
+  smartRoutingActive: false,
+  onboarding: {
+    complete: false,
+    companyData: null,
+    integrations: {
+      gmail: false,
+      linkedin: false,
+      whatsapp: false,
+      sms: false,
+    }
+  },
+  ui: {
+    showPersonality: false,
+    showHowItWorks: false,
+    addMode: null, // 'ai' | 'upload' | null
+  }
 };
 
 export function CampaignProvider({ children }) {
@@ -58,11 +74,12 @@ export function CampaignProvider({ children }) {
       }));
     }, 1000);
 
-    const leads = ['Rahul Singh', 'Priya Mehta', 'James Lee', 'Chen Wei', 'Maria Santos', 'Aisha Patel'];
+    const leadsArray = ['Rahul Singh', 'Priya Mehta', 'James Lee', 'Chen Wei', 'Maria Santos', 'Aisha Patel'];
     const statBump = setInterval(() => {
       setState(s => {
+        if (s.campaign.status !== 'active') return s;
         const roll = Math.random();
-        const lead = leads[Math.floor(Math.random() * leads.length)];
+        const lead = leadsArray[Math.floor(Math.random() * leadsArray.length)];
         if (roll < 0.35) {
           return { ...s, stats: { ...s.stats, emailsSent: s.stats.emailsSent + 1 },
             feed: [{ id: Date.now(), type: 'email_sent', lead, detail: 'Outreach email sent', color: 'blue', time: 'Just now' }, ...s.feed.slice(0, 9)],
@@ -89,12 +106,41 @@ export function CampaignProvider({ children }) {
     setState(s => ({ ...s, campaign: { ...s.campaign, status } }));
   }, []);
 
+  const toggleSmartRouting = useCallback((active) => {
+    setState(s => ({ ...s, smartRoutingActive: typeof active === 'boolean' ? active : !s.smartRoutingActive }));
+  }, []);
+
+  const setOnboardingData = useCallback((data) => {
+    setState(s => ({ ...s, onboarding: { ...s.onboarding, companyData: data } }));
+  }, []);
+
+  const setIntegrationStatus = useCallback((channel, status) => {
+    setState(s => ({ ...s, onboarding: { ...s.onboarding, integrations: { ...s.onboarding.integrations, [channel]: status } } }));
+  }, []);
+
+  const completeOnboarding = useCallback(() => {
+    setState(s => ({ ...s, onboarding: { ...s.onboarding, complete: true } }));
+  }, []);
+
   const clearBadge = useCallback((page) => {
     setState(s => ({ ...s, pageBadges: { ...s.pageBadges, [page]: false } }));
   }, []);
 
+  const setUIState = useCallback((key, value) => {
+    setState(s => ({ ...s, ui: { ...s.ui, [key]: value } }));
+  }, []);
+
   return (
-    <CampaignContext.Provider value={{ state, updateCampaignStatus, clearBadge }}>
+    <CampaignContext.Provider value={{
+      state,
+      updateCampaignStatus,
+      toggleSmartRouting,
+      setOnboardingData,
+      setIntegrationStatus,
+      completeOnboarding,
+      clearBadge,
+      setUIState,
+    }}>
       {children}
     </CampaignContext.Provider>
   );
