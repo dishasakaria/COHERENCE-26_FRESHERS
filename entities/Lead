@@ -1,0 +1,115 @@
+{
+  "name": "Lead",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Full name of the lead"
+    },
+    "email": {
+      "type": "string",
+      "description": "Email address"
+    },
+    "company": {
+      "type": "string",
+      "description": "Company name"
+    },
+    "title": {
+      "type": "string",
+      "description": "Job title"
+    },
+    "industry": {
+      "type": "string"
+    },
+    "department": {
+      "type": "string"
+    },
+    "city": {
+      "type": "string"
+    },
+    "linkedin_url": {
+      "type": "string"
+    },
+    "phone_number": {
+      "type": "string"
+    },
+    "disc_type": {
+      "type": "string",
+      "enum": [
+        "D",
+        "I",
+        "S",
+        "C"
+      ]
+    },
+    "disc_confidence": {
+      "type": "number"
+    },
+    "disc_reason": {
+      "type": "string"
+    },
+    "interest_score": {
+      "type": "number",
+      "default": 0
+    },
+    "trust_score": {
+      "type": "number",
+      "default": 0
+    },
+    "fatigue_score": {
+      "type": "number",
+      "default": 0
+    },
+    "stage": {
+      "type": "string",
+      "enum": [
+        "new",
+        "in_sequence",
+        "engaged",
+        "hot",
+        "replied",
+        "meeting_scheduled",
+        "converted",
+        "nurture"
+      ],
+      "default": "new"
+    },
+    "client_company_id": {
+      "type": "string"
+    },
+    "workflow_id": {
+      "type": "string"
+    },
+    "is_paused": {
+      "type": "boolean",
+      "default": false
+    },
+    "is_human_managed": {
+      "type": "boolean",
+      "default": false
+    },
+    "company_personality": {
+      "type": "string"
+    },
+    "match_score": {
+      "type": "number"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "last_contacted": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "channels_used": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "name",
+    "email"
+  ]
+}

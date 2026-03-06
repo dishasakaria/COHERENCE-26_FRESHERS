@@ -1,0 +1,70 @@
+{
+  "name": "Activity",
+  "type": "object",
+  "properties": {
+    "lead_id": {
+      "type": "string"
+    },
+    "lead_name": {
+      "type": "string"
+    },
+    "lead_company": {
+      "type": "string"
+    },
+    "client_company_id": {
+      "type": "string"
+    },
+    "client_company_name": {
+      "type": "string"
+    },
+    "channel": {
+      "type": "string",
+      "enum": [
+        "email",
+        "linkedin",
+        "whatsapp",
+        "sms",
+        "call"
+      ]
+    },
+    "action_type": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "message_content": {
+      "type": "string"
+    },
+    "ai_reasoning": {
+      "type": "string"
+    },
+    "ai_confidence": {
+      "type": "number"
+    },
+    "outcome": {
+      "type": "string"
+    },
+    "is_flagged": {
+      "type": "boolean",
+      "default": false
+    },
+    "is_overridden": {
+      "type": "boolean",
+      "default": false
+    },
+    "override_reason": {
+      "type": "string"
+    },
+    "human_rating": {
+      "type": "string",
+      "enum": [
+        "positive",
+        "negative"
+      ]
+    }
+  },
+  "required": [
+    "action_type"
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "name": "Alert",
+  "type": "object",
+  "properties": {
+    "severity": {
+      "type": "string",
+      "enum": [
+        "critical",
+        "warning",
+        "info"
+      ],
+      "default": "info"
+    },
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "affected_company": {
+      "type": "string"
+    },
+    "affected_company_id": {
+      "type": "string"
+    },
+    "recommended_action": {
+      "type": "string"
+    },
+    "is_dismissed": {
+      "type": "boolean",
+      "default": false
+    },
+    "alert_type": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "title"
+  ]
+}
