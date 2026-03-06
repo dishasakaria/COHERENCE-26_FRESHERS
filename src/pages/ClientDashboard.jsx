@@ -93,16 +93,62 @@ export default function ClientDashboard() {
     setUIState('addMode', null);
   };
 
+  const [uploadStatus, setUploadStatus] = useState(null); // 'uploading' | 'processing' | 'generating' | 'sending' | 'done' | null
+  const [lastResults, setLastResults] = useState([]);
+
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    const { file_url } = await base44.integrations.Core.UploadFile({ file });
-    const result = await base44.integrations.Core.ExtractDataFromUploadedFile({ file_url, json_schema: { type: "array", items: { type: "object", properties: { name: { type: "string" }, email: { type: "string" }, company: { type: "string" }, title: { type: "string" } } } } });
-    if (result?.output) {
-      const data = (Array.isArray(result.output) ? result.output : [result.output]).map(l => ({ ...l, interest_score: 0, trust_score: 0, fatigue_score: 0, stage: 'new', channels_used: [] }));
-      await createLeadsMutation.mutateAsync(data);
+    
+    setUploadStatus('uploading');
+    try {
+      // Step 1: Uploading
+      const formData = new FormData();
+      formData.append("csvfile", file);
+
+      // We use the direct fetch as requested or the api utility
+      setUploadStatus('processing');
+      const response = await fetch("http://localhost:5678/webhook/upload-leads", {
+        method: "POST",
+        body: formData
+      });
+
+      if (!response.ok) throw new Error("n8n connection failed");
+
+      setUploadStatus('generating');
+      // Simulate some time for generating/sending if n8n doesn't return immediately
+      // Actually, n8n will return the final results if configured correctly
+      const results = await response.json();
+      
+      setUploadStatus('sending');
+      await new Promise(r => setTimeout(r, 1000)); // Brief pause for UI effect
+      
+      setLastResults(results);
+      setUploadStatus('done');
+      
+      // If results is an array of leads, save them to the local entities
+      if (Array.isArray(results)) {
+        const leadsToCreate = results.map(l => ({
+          name: l.name,
+          email: l.email || l.company_email,
+          company: l.company,
+          title: l.title,
+          industry: l.industry || 'Unknown',
+          generated_email: l.generated_email,
+          disc_type: l.disc_type || 'Unknown',
+          interest_score: l.interest_score || 0,
+          trust_score: l.trust_score || 0,
+          fatigue_score: l.fatigue_score || 0,
+          stage: 'replied', // Since n8n sent the email, they are in progress
+          status: 'emailed'
+        }));
+        await createLeadsMutation.mutateAsync(leadsToCreate);
+      }
+    } catch (err) {
+      console.error("Upload failed", err);
+      setUploadStatus(null);
+      alert("Failed to connect to n8n backend. Ensure it is running at http://localhost:5678");
     }
-    setUIState('addMode', null);
   };
 
   const hoursAgo = campaign?.startTime
@@ -138,11 +184,45 @@ export default function ClientDashboard() {
         {addMode === 'upload' && (
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
             className="bg-[#111118] border border-[#1e1e2e] rounded-2xl overflow-hidden shrink-0">
-            <label className="block p-6 text-center cursor-pointer hover:bg-white/[0.02]">
-              <Upload className="w-7 h-7 text-slate-600 mx-auto mb-2" />
-              <p className="text-sm text-slate-400">Drop CSV/Excel here or click to browse</p>
-              <input type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleFileUpload} />
-            </label>
+            {uploadStatus && uploadStatus !== 'done' ? (
+              <div className="p-8 flex flex-col items-center justify-center text-center">
+                <div className="w-12 h-12 rounded-full border-t-2 border-indigo-500 animate-spin mb-4" />
+                <p className="text-sm font-medium text-white capitalize">{uploadStatus}...</p>
+                <p className="text-xs text-slate-500 mt-2">
+                  {uploadStatus === 'uploading' && 'Streaming file to backend...'}
+                  {uploadStatus === 'processing' && 'Extracting leads and researching companies...'}
+                  {uploadStatus === 'generating' && 'Groq Llama-3.1 generating personalized emails...'}
+                  {uploadStatus === 'sending' && 'Queueing outreach via Gmail SMTP...'}
+                </p>
+              </div>
+            ) : uploadStatus === 'done' ? (
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <p className="text-sm font-bold text-emerald-400">✅ {lastResults.length} Leads Processed Successfully</p>
+                  <button onClick={() => setUploadStatus(null)} className="text-xs text-slate-500 hover:text-white">Clear</button>
+                </div>
+                <div className="max-h-48 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                  {lastResults.map((rl, i) => (
+                    <div key={i} className="bg-[#0a0a0f] border border-[#1e1e2e] rounded-xl p-3 flex items-center justify-between">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-bold text-white truncate">{rl.name} <span className="text-slate-600 font-normal">@ {rl.company}</span></p>
+                        <p className="text-[10px] text-slate-500 mt-0.5 truncate">{rl.generated_email?.slice(0, 60)}...</p>
+                      </div>
+                      <div className="flex items-center gap-2 ml-4 shrink-0">
+                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 font-bold">{rl.disc_type || 'D'}</span>
+                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold">SENT</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <label className="block p-6 text-center cursor-pointer hover:bg-white/[0.02]">
+                <Upload className="w-7 h-7 text-slate-600 mx-auto mb-2" />
+                <p className="text-sm text-slate-400">Drop CSV/Excel here or click to browse</p>
+                <input type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleFileUpload} />
+              </label>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

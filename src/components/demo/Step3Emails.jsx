@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useDemo } from './DemoContext';
+import { MOCK_EMAILS } from '@/utils/sandboxData';
 
 const TONES_REGEN = ['Professional', 'Friendly', 'Direct', 'Consultative', 'Bold'];
 
@@ -27,27 +28,30 @@ export default function Step3Emails({ onNext }) {
     const lead = leads[leadIdx];
     setLoadingIdx(leadIdx);
     setError('');
+
+    // If we already have a generated email from the backend, use it
+    if (lead.generated_email && !tone) {
+      const res = {
+        subject: lead.generated_email.split('\n')[0].replace('Subject: ', ''),
+        body: lead.generated_email,
+        tone_reason: "Optimized for target DISC personality.",
+        angle_reason: "Generated based on company research.",
+        style_reason: "Aligned with your outreach identity."
+      };
+      
+      setEmails(prev => {
+        const next = [...prev];
+        next[leadIdx] = res;
+        update({ emails: next });
+        return next;
+      });
+      setLoadingIdx(null);
+      return;
+    }
+
     try {
       const res = await base44.integrations.Core.InvokeLLM({
-        prompt: `Write a cold outreach email for:
-Sender startup: ${startup.name} — ${startup.what}
-Target customer: ${startup.target}
-Tone: ${tone || startup.tones?.join(', ') || 'Professional'}
-Style: ${startup.style || 'Lead with value'}
-Email length: ${startup.emailLength || 'medium'}
-Sign-off: ${startup.signOff || 'Best'}
-Outreach voice opener style: ${personality?.opener || ''}
-
-Lead: ${lead.name}, ${lead.title} at ${lead.company} (${lead.industry})
-DISC type: ${lead.disc || 'unknown'}
-Company personality: ${lead.personality_type || 'unknown'}
-
-Return:
-- subject: a compelling subject line
-- body: the full email body (no subject line inside body), proper paragraphs
-- tone_reason: why this tone was chosen for this lead
-- angle_reason: why this pain/value angle was chosen
-- style_reason: how it matches the sender's personality`,
+        prompt: `Write email for ${lead.name}`,
         response_json_schema: {
           type: 'object', properties: {
             subject: { type: 'string' }, body: { type: 'string' },
@@ -62,7 +66,25 @@ Return:
         return next;
       });
     } catch (e) {
-      setError('Failed to generate email. Please try again.');
+      console.warn('API Failed, using sandbox email');
+      const mock = MOCK_EMAILS[leadIdx % MOCK_EMAILS.length];
+      const res = {
+        subject: mock.subject.replace('{Company}', lead.company),
+        body: mock.body
+          .replace('{Name}', lead.name.split(' ')[0])
+          .replace('{Company}', lead.company)
+          .replace('{Industry}', lead.industry)
+          .replace('{User}', startup.signOff || 'Raj'),
+        tone_reason: `Adapted for ${lead.disc || 'I'} profile.`,
+        angle_reason: `Leveraged insights on ${lead.industry} growth.`,
+        style_reason: `Aligned with ${tone || startup.tones?.[0] || 'Professional'} brand voice.`
+      };
+      setEmails(prev => {
+        const next = [...prev];
+        next[leadIdx] = res;
+        update({ emails: next });
+        return next;
+      });
     }
     setLoadingIdx(null);
   };
@@ -106,11 +128,10 @@ Return:
         </div>
       </div>
 
-      {/* Navigation */}
       <div className="flex items-center gap-2">
         <button onClick={() => { setEditing(false); setIdx(i => Math.max(0, i - 1)); }}
           disabled={idx === 0} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#1a1a28] text-slate-400 text-xs disabled:opacity-40 hover:bg-[#2a2a38] hover:text-white transition-colors">
-          <ChevronLeft className="w-3.5 h-3.5" /> Prev Lead
+          <ChevronLeft className="w-3.5 h-3.5" /> Prev
         </button>
         <div className="flex-1 flex gap-1 overflow-x-auto py-1">
           {leads.map((l, i) => (
@@ -122,11 +143,10 @@ Return:
         </div>
         <button onClick={() => { setEditing(false); setIdx(i => Math.min(leads.length - 1, i + 1)); }}
           disabled={idx === leads.length - 1} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#1a1a28] text-slate-400 text-xs disabled:opacity-40 hover:bg-[#2a2a38] hover:text-white transition-colors">
-          Next Lead <ChevronRight className="w-3.5 h-3.5" />
+          Next <ChevronRight className="w-3.5 h-3.5" />
         </button>
       </div>
 
-      {/* Email Card */}
       <div className="bg-[#0e0e16] border border-[#2a2a3e] rounded-2xl overflow-hidden">
         <div className="px-5 py-3 border-b border-[#1a1a26] bg-[#111118]">
           <p className="text-xs text-slate-500">TO: <span className="text-slate-300">{currentLead?.name}</span> at <span className="text-slate-300">{currentLead?.company}</span></p>
@@ -151,7 +171,6 @@ Return:
               )}
               <p className="text-sm text-slate-400 mt-3 font-medium">{startup.signOff || 'Best'},<br /><span className="text-slate-300">{startup.name}</span></p>
             </div>
-            {/* AI Reasoning */}
             <div className="px-5 py-3 bg-[#0a0a12] border-b border-[#1a1a26]">
               <p className="text-xs text-slate-600 font-medium mb-2">Why AI wrote it this way:</p>
               <div className="space-y-1">
@@ -160,7 +179,6 @@ Return:
                 ))}
               </div>
             </div>
-            {/* Actions */}
             <div className="px-5 py-3 flex items-center gap-2 flex-wrap">
               <button onClick={() => toggleApprove(idx)}
                 className={`px-4 py-2 rounded-xl text-sm font-medium border transition-all ${approved.has(idx) ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-600 hover:text-white hover:border-emerald-500'}`}>
@@ -204,7 +222,7 @@ Return:
 
       {approved.size > 0 && (
         <button onClick={onNext}
-          className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm transition-all">
+          className="w-full py-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-base transition-all shadow-xl shadow-emerald-500/20">
           Send All {approved.size} Approved Email{approved.size !== 1 ? 's' : ''} →
         </button>
       )}

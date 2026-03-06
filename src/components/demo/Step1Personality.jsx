@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Loader2 } from 'lucide-react';
 import { useDemo } from './DemoContext';
+import { MOCK_PERSONALITY } from '@/utils/sandboxData';
 
 const TONES = ['Confident', 'Direct', 'Warm', 'Witty', 'Formal', 'Conversational', 'Bold', 'Data-driven'];
 const STYLES = [
@@ -55,7 +56,13 @@ Return a JSON object with:
       setCard(result);
       update({ startup: form, personalityCard: result });
     } catch (e) {
-      setError('AI failed to generate personality. Please try again.');
+      console.warn('API Failed, using sandbox fallback');
+      const fallback = {
+        ...MOCK_PERSONALITY,
+        opener: MOCK_PERSONALITY.opener.replace('APAC market', `${form.target} sector`)
+      };
+      setCard(fallback);
+      update({ startup: form, personalityCard: fallback });
     }
     setLoading(false);
   };

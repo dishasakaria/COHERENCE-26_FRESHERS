@@ -60,7 +60,13 @@ export default function Step4Send({ onNext }) {
 
       {/* SMTP Form */}
       <div className="bg-[#0e0e16] border border-[#2a2a3e] rounded-2xl p-5 space-y-4">
-        <p className="text-sm font-semibold text-white">Connect your email</p>
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-semibold text-white">Connect your email</p>
+          <button onClick={() => { setSmtpEmail('raj@flowreach.ai'); setSmtpPass('demo-flow-safe'); }}
+            className="text-[10px] text-violet-400 hover:text-violet-300 transition-colors uppercase font-bold tracking-widest">
+            Auto-fill Sandbox
+          </button>
+        </div>
         <div>
           <label className="text-xs text-slate-400 block mb-1.5">Your email</label>
           <input type="email" value={smtpEmail} onChange={e => setSmtpEmail(e.target.value)}

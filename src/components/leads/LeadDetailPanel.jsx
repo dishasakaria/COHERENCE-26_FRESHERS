@@ -58,12 +58,29 @@ function getPath(lead) {
 }
 
 // Mock email history per lead
-function getMockEmails(lead) {
-  return [
+// Lead email history
+function getEmails(lead) {
+  const history = [];
+  
+  if (lead.generated_email) {
+    history.push({
+      id: 'gen-1',
+      label: 'AI Outreach',
+      type: 'email',
+      date: 'Just Now',
+      status: lead.status === 'emailed' ? 'Sent' : 'Ready',
+      disc: lead.disc_type || 'Unknown',
+      subject: lead.generated_email.split('\n')[0].replace('Subject: ', ''),
+      body: lead.generated_email
+    });
+  }
+
+  const mocks = [
     { id: 1, label: 'Email #1', type: 'email', date: 'Mar 4', status: 'Opened', disc: lead.disc_type || 'C', subject: `Quick question about ${lead.company || 'your company'}`, body: `Hi ${lead.name?.split(' ')[0] || 'there'},\n\nI came across ${lead.company || 'your company'} while researching leaders in ${lead.industry || 'your industry'} — impressive trajectory.\n\nWe help teams like yours cut outreach time by 70% while tripling reply rates using AI-personalized sequences.\n\nWould 15 minutes this week make sense to explore if this fits your current priorities?\n\nBest,\nAlex` },
     { id: 2, label: 'Follow-up #1', type: 'email', date: 'Mar 6', status: 'Sent', disc: lead.disc_type || 'C', subject: `Re: Quick question about ${lead.company || 'your company'}`, body: `Hi ${lead.name?.split(' ')[0] || 'there'},\n\nJust circling back on my previous note. I know inboxes get busy.\n\nOne thing that might be relevant: we recently helped a ${lead.industry || 'similar'} company increase their booked meetings by 3x in 6 weeks.\n\nHappy to share how — would a brief call work?\n\nAlex` },
-    { id: 3, label: 'LinkedIn DM #1', type: 'linkedin', date: 'Mar 7', status: 'Clicked', disc: lead.disc_type || 'I', subject: 'LinkedIn connection note', body: `Hi ${lead.name?.split(' ')[0] || 'there'}, noticed your post about ${lead.industry || 'the industry'} — completely aligned with what we're seeing too. Would love to connect!` },
   ];
+
+  return [...history, ...mocks];
 }
 
 const STAGE_OPTIONS = ['new', 'in_sequence', 'engaged', 'hot', 'replied', 'meeting_scheduled', 'converted', 'nurture'];
@@ -102,7 +119,7 @@ export default function LeadDetailPanel({ lead, onClose }) {
 
   const score = calcScore(lead);
   const path = getPath(lead);
-  const emails = getMockEmails(lead);
+  const emails = getEmails(lead);
   const currentEmail = emails[selectedEmail];
   const isHot = ['hot', 'replied'].includes(lead.stage);
 
